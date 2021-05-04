@@ -3,6 +3,7 @@ package com.example.cameraxapp
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.Manifest
+import android.annotation.SuppressLint
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.util.Log
@@ -22,6 +23,7 @@ typealias LumaListener = (luma: Double) -> Unit
 
 class MainActivity : AppCompatActivity() {
     private var imageCapture: ImageCapture? = null
+    private var videoCapture: VideoCapture? = null
 
     private lateinit var outputDirectory: File
     private lateinit var cameraExecutor: ExecutorService
@@ -40,6 +42,10 @@ class MainActivity : AppCompatActivity() {
 
         // Set up the listener for take photo button
         camera_capture_button.setOnClickListener { takePhoto() }
+
+        video_capture_button.setOnClickListener { takeVideo() }
+
+        video_stop_button.setOnClickListener { stopVideo() }
 
         outputDirectory = getOutputDirectory()
 
@@ -91,6 +97,41 @@ class MainActivity : AppCompatActivity() {
             })
     }
 
+    @SuppressLint("RestrictedApi")
+    private fun takeVideo() {
+        val videoCapture = videoCapture ?: return
+
+        // Create time-stamped output file to hold the video
+        val videoFile = File(
+                outputDirectory,
+                SimpleDateFormat(FILENAME_FORMAT, Locale.US
+                ).format(System.currentTimeMillis()) + ".mp4")
+
+        videoCapture.startRecording(
+                videoFile, ContextCompat.getMainExecutor(this), object : VideoCapture.OnVideoSavedCallback {
+
+            override fun onError(videoCaptureError: Int, message: String, cause: Throwable?) {
+                Log.e(TAG, "Video capture failed: $message", cause)
+            }
+
+            override fun onVideoSaved(file: File) {
+                val savedUri = Uri.fromFile(file)
+                val msg = "Photo capture succeeded: $savedUri"
+                Toast.makeText(baseContext, msg, Toast.LENGTH_SHORT).show()
+                Log.d(TAG, msg)
+            }
+
+        }
+        )
+    }
+
+    @SuppressLint("RestrictedApi")
+    private fun stopVideo() {
+        val videoCapture = videoCapture ?: return
+
+        videoCapture.stopRecording()
+    }
+
     private fun startCamera() {
         val cameraProviderFuture = ProcessCameraProvider.getInstance(this)
 
@@ -107,6 +148,9 @@ class MainActivity : AppCompatActivity() {
 
             imageCapture = ImageCapture.Builder()
                 .build()
+
+            videoCapture = VideoCapture.Builder()
+                    .build()
 
             val imageAnalyzer = ImageAnalysis.Builder()
                 .build()
@@ -125,7 +169,7 @@ class MainActivity : AppCompatActivity() {
 
                 // Bind use cases to camera
                 cameraProvider.bindToLifecycle(
-                    this, cameraSelector, preview, imageCapture, imageAnalyzer)
+                    this, cameraSelector, preview, imageCapture, videoCapture)
 
             } catch(exc: Exception) {
                 Log.e(TAG, "Use case binding failed", exc)
@@ -155,7 +199,7 @@ class MainActivity : AppCompatActivity() {
         private const val TAG = "CameraXBasic"
         private const val FILENAME_FORMAT = "yyyy-MM-dd-HH-mm-ss-SSS"
         private const val REQUEST_CODE_PERMISSIONS = 10
-        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA)
+        private val REQUIRED_PERMISSIONS = arrayOf(Manifest.permission.CAMERA, Manifest.permission.RECORD_AUDIO)
     }
 }
 
